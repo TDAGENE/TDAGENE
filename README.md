@@ -15,9 +15,9 @@ We currently provide the main source code, and the complete code will be release
 1. __Preparing  for gene expression profiles and  gene-gene adjacent matrix__
    
    TDAGENE integrates gene expression matrix __(N×M)__ with prior gene topology __(N×N)__ to learn low-dimensional vertorized representations with supervision.
-2. **Command to run GENElink**
+2. **Command to run TDAGENE**
    
-   To train an ab initio model, simply uses the script 'main.py'.
+   To train an ab initio model, simply uses the script 'train.py'.
    
    `` python train.py``
    
