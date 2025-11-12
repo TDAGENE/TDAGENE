@@ -25,7 +25,6 @@ except Exception:
     sc = None
 import networkx as nx
 
-# 可选：用于聚类的 KMeans（当 Leiden/Louvain 不可用时兜底）
 try:
     from sklearn.cluster import KMeans
 except Exception:
@@ -76,14 +75,13 @@ def embed2file(tf_embed, tg_embed, gene_file, tf_path, target_path):
     tf_embed_df.to_csv(tf_path)
     tg_embed_df.to_csv(target_path)
 
-# 可直接使用预处理的 AnnData 来绘图（与现有训练流程独立）
 exp_file = '.../BL--ExpressionData.csv'
 tf_file = '.../TF.csv'
 target_file = '.../Target.csv'
 
 train_file = os.path.join('...', '...', '...', 'Train_set.csv')
 val_file = os.path.join('...', '...', '...', 'Validation_set.csv')
-test_file = os.path.join('...', '...', '...', 'Test_set.csv')  # 添加测试集路径
+test_file = os.path.join('...', '...', '...', 'Test_set.csv')  
 
 tf_embed_path = '.../Channel1.csv'
 target_embed_path = '.../Channel2.csv'
@@ -104,7 +102,7 @@ tf_indices = tf_indices.to(device)
 
 train_data = pd.read_csv(train_file, index_col=0).values
 validation_data = pd.read_csv(val_file, index_col=0).values
-test_data = pd.read_csv(test_file, index_col=0).values  # 加载测试集数据
+test_data = pd.read_csv(test_file, index_col=0).values  
 
 train_load = scRNADataset(train_data, feature.shape[0], flag=args.flag)
 adj = train_load.Adj_Generate(tf_indices, loop=args.loop)
@@ -243,9 +241,9 @@ with torch.no_grad():
 embed2file(tf_embed, target_embed, target_file, tf_embed_path, target_embed_path)
 print("Embeddings saved successfully.")
 
-# ---------- 生成 UMAP 图（按时间与 marker 基因着色）----------
+
 try:
-    # 复用 scGNN 的预处理，得到 AnnData
+   
     _, _, adata = preprocess_data(exp_file, hvg_n=2000, log_normalize=True, corr_threshold=0.5, infer_time=True)
     umap_out_dir = os.path.join(os.path.dirname(tf_embed_path), 'umap')
     plot_umap_by_time_and_markers(
@@ -260,27 +258,27 @@ try:
 except Exception as e:
     print(f"UMAP plotting skipped due to error: {e}")
 
-# ---------- 使用训练好的模型嵌入绘图与导出关系 ----------
+
 try:
-    # 读取基因名
+  
     gene_set = pd.read_csv(target_file, index_col=0)
     gene_names = gene_set['Gene'].values if 'Gene' in gene_set.columns else np.array([f"g{i}" for i in range(tf_embed.shape[0])])
 
-    # 使用训练后的嵌入构建基因 AnnData 并 UMAP（若可用）
+  
     if sc is not None:
-        # 融合 TF/Target 两路嵌入（简单平均）
+       
         gene_embed = (tf_embed.detach().cpu().numpy() + target_embed.detach().cpu().numpy()) / 2.0
         adata_g = sc.AnnData(gene_embed)
         adata_g.obs_names = gene_names
-        # PCA 维度需严格小于 min(n_samples, n_features)
+
         n_samples, n_features = gene_embed.shape
-        # 严格小于 min(n_samples, n_features) 防止 arpack 报错
+
         n_comps_safe = max(2, min(50, n_features - 1, n_samples - 1))
         n_pcs_safe = max(2, min(30, n_features - 1, n_samples - 1, n_comps_safe))
         sc.pp.pca(adata_g, n_comps=n_comps_safe)
         sc.pp.neighbors(adata_g, n_neighbors=15, n_pcs=n_pcs_safe)
         sc.tl.umap(adata_g)
-        # 计算聚类：优先 Leiden，其次 Louvain，最后 KMeans 兜底
+
         clustered = False
         try:
             sc.tl.leiden(adata_g, key_added='cluster', resolution=1.0)
@@ -288,7 +286,7 @@ try:
         except Exception:
             clustered = False
 
-        # 如果没有成功或只有一个簇，则尝试 Louvain
+
         if not clustered or ('cluster' not in adata_g.obs.columns or pd.unique(adata_g.obs['cluster']).size < 2):
             try:
                 sc.tl.louvain(adata_g, key_added='cluster', resolution=1.0)
@@ -296,7 +294,7 @@ try:
             except Exception:
                 clustered = False
 
-        # 仍失败或只有一个簇，则使用 KMeans 兜底
+
         if (not clustered) or ('cluster' not in adata_g.obs.columns or pd.unique(adata_g.obs['cluster']).size < 2):
             if KMeans is not None:
                 k_default = max(3, min(12, int(np.sqrt(n_samples))))
@@ -310,14 +308,14 @@ try:
             else:
                 adata_g.obs['cluster'] = pd.Categorical(['0'] * n_samples)
 
-        # 确保为分类类型，便于着色
+
         if 'cluster' in adata_g.obs.columns:
             if not pd.api.types.is_categorical_dtype(adata_g.obs['cluster']):
                 adata_g.obs['cluster'] = adata_g.obs['cluster'].astype('category')
 
         emb_out_dir = os.path.join(os.path.dirname(tf_embed_path), 'model_embed')
         os.makedirs(emb_out_dir, exist_ok=True)
-        # 颜色调板：若簇数 > 20 让 scanpy 自动分配
+
         n_clusters = pd.unique(adata_g.obs['cluster']).size if 'cluster' in adata_g.obs.columns else 1
         palette = 'tab20' if n_clusters <= 20 else None
         sc.pl.umap(adata_g, color='cluster', palette=palette, title='UMAP of Gene Embeddings (avg TF/Target)', show=False)
@@ -325,15 +323,15 @@ try:
         plt.close()
         print(f"Model-embedding UMAP saved to: {emb_out_dir}")
 
-    # 基于嵌入的相似度导出热图和Top边
+
     tf_np = tf_embed.detach().cpu().numpy()
     tg_np = target_embed.detach().cpu().numpy()
-    # 归一化后计算余弦相似度矩阵
+
     tf_norm = tf_np / (np.linalg.norm(tf_np, axis=1, keepdims=True) + 1e-8)
     tg_norm = tg_np / (np.linalg.norm(tg_np, axis=1, keepdims=True) + 1e-8)
     score_mat = tf_norm @ tg_norm.T
 
-    # 保存热图（若维度大，可能较慢）
+
     try:
         import seaborn as sns
         plt.figure(figsize=(8, 6))
@@ -347,7 +345,7 @@ try:
     except Exception:
         pass
 
-    # 导出Top-K边
+
     topk = 20000
     flat_idx = np.argpartition(-score_mat.ravel(), topk)[:topk]
     rows, cols = np.unravel_index(flat_idx, score_mat.shape)
@@ -363,12 +361,11 @@ except Exception as e:
     print(f"Model-embedding plotting skipped due to error: {e}")
 
 
-# ---------- 重建 GRN（基于训练后嵌入），并保存边表与核心可视化 ----------
 try:
     emb_out_dir = os.path.join(os.path.dirname(tf_embed_path), 'model_embed')
     os.makedirs(emb_out_dir, exist_ok=True)
 
-    # 使用 score_mat；若未生成则计算
+
     if 'score_mat' not in globals():
         tf_np = tf_embed.detach().cpu().numpy()
         tg_np = target_embed.detach().cpu().numpy()
@@ -376,7 +373,7 @@ try:
         tg_norm = tg_np / (np.linalg.norm(tg_np, axis=1, keepdims=True) + 1e-8)
         score_mat = tf_norm @ tg_norm.T
 
-    # 选择全局Top-K边构建GRN
+
     K = 5000
     flat_idx = np.argpartition(-score_mat.ravel(), K)[:K]
     rows, cols = np.unravel_index(flat_idx, score_mat.shape)
@@ -390,14 +387,14 @@ try:
     grn_df.to_csv(grn_path, index=False)
     print(f"Reconstructed GRN edge list saved to: {grn_path}")
 
-    # 构建 NetworkX 图
+
     G = nx.DiGraph()
     for name in gene_names:
         G.add_node(name)
     for tf, tg, s in grn_df.itertuples(index=False):
         G.add_edge(tf, tg, weight=float(s))
 
-    # 保存图文件（可供 Gephi/Cytoscape 使用）
+
     gml_path = os.path.join(emb_out_dir, 'reconstructed_grn.gml')
     try:
         nx.write_gml(G, gml_path)
@@ -405,7 +402,7 @@ try:
     except Exception:
         pass
 
-    # 核心圆形可视化：度数最高前 N 个基因
+
     N = 30
     degrees = dict(G.degree())
     core_nodes = sorted(degrees.keys(), key=lambda n: degrees[n], reverse=True)[:N]
@@ -430,20 +427,20 @@ except Exception as e:
     print(f"GRN reconstruction skipped due to error: {e}")
 
 
-# ---------- 追加：marker 小提琴图与分组共表达相关性 ----------
+
 try:
-    # 复用已预处理的 adata（再次生成，确保与上一步相同设置）
+   
     _, _, adata_v = preprocess_data(exp_file, hvg_n=2000, log_normalize=True, corr_threshold=0.5, infer_time=True)
     out_dir_base = os.path.join(os.path.dirname(tf_embed_path), 'umap')
     os.makedirs(out_dir_base, exist_ok=True)
 
     markers = ['NANOG', 'POU5F1', 'SOX2']
-    # 仅保留存在于数据中的基因
+  
     markers_present = [g for g in markers if g in list(adata_v.var_names)]
     if len(markers_present) == 0:
         raise ValueError('None of the marker genes are present in adata.var_names')
 
-    # 小提琴图（按 time 分组）
+
     try:
         ax = sc.pl.violin(adata_v, keys=markers_present, groupby='time', multi_panel=True, stripplot=False, jitter=0, show=False)
         plt.savefig(os.path.join(out_dir_base, 'violin_markers_by_time.png'), dpi=300, bbox_inches='tight')
@@ -452,7 +449,7 @@ try:
     except Exception as e_violin:
         print(f"Violin plotting skipped due to error: {e_violin}")
 
-    # 分时间点的共表达相关（Pearson）
+
     import itertools
     from scipy.stats import pearsonr
     times = sorted(list(pd.unique(adata_v.obs['time']))) if 'time' in adata_v.obs else ['all']
@@ -475,7 +472,7 @@ try:
     corr_df.to_csv(corr_csv_path, index=False)
     print(f"Marker correlation CSV saved to: {corr_csv_path}")
 
-    # 也绘制每个时间点的 3x3 相关矩阵热图
+
     try:
         import seaborn as sns
         for t in times:
@@ -505,7 +502,7 @@ try:
     except Exception as e_heat:
         print(f"Correlation heatmap skipped due to error: {e_heat}")
 
-    # TDA cycles over time（按时间点计算 TDA 的 num_cycles 指标）
+
     try:
         if 'time' in adata_v.obs:
             time_points = sorted(list(pd.unique(adata_v.obs['time'])))
@@ -530,14 +527,14 @@ try:
                 sub_x = sub_adata.X.T
                 if not isinstance(sub_x, np.ndarray):
                     sub_x = sub_x.A
-                # 重算该时间点的共表达邻接，避免与全局 adj 维度不匹配
+              
                 sub_adj = _build_sub_adj(sub_x, threshold=0.5)
                 sub_x = torch.tensor(sub_x, dtype=torch.float, device=device)
                 tda_feat = compute_tda_feature(sub_x, sub_adj, device)
-                # 假定 compute_tda_feature 返回向量的第二个元素是 num_cycles
+                
                 tda_num_cycles.append(float(tda_feat[1].item()))
 
-            # 将时间点映射为序号以避免字符串排序绘图问题
+           
             xs = list(range(len(time_points)))
             plt.figure(figsize=(7,4))
             plt.scatter(xs, tda_num_cycles, color='blue')
@@ -557,3 +554,4 @@ try:
 except Exception as e:
 
     print(f"Additional marker plotting skipped due to error: {e}")
+
