@@ -77,16 +77,16 @@ def embed2file(tf_embed, tg_embed, gene_file, tf_path, target_path):
     tg_embed_df.to_csv(target_path)
 
 # 可直接使用预处理的 AnnData 来绘图（与现有训练流程独立）
-exp_file = r'D:/test2/test-main/Dataset/Benchmark Dataset/Specific Dataset/hESC/TFs+500/BL--ExpressionData.csv'
-tf_file = r'D:/test2/test-main/Dataset/Benchmark Dataset/Specific Dataset/hESC/TFs+500/TF.csv'
-target_file = r'D:/test2/test-main/Dataset/Benchmark Dataset/Specific Dataset/hESC/TFs+500/Target.csv'
+exp_file = '.../BL--ExpressionData.csv'
+tf_file = '.../TF.csv'
+target_file = '.../Target.csv'
 
-train_file = os.path.join('Splits2', 'Specific', 'hESC 500', 'Train_set.csv')
-val_file = os.path.join('Splits2', 'Specific', 'hESC 500', 'Validation_set.csv')
-test_file = os.path.join('Splits2', 'Specific', 'hESC 500', 'Test_set.csv')  # 添加测试集路径
+train_file = os.path.join('...', '...', '...', 'Train_set.csv')
+val_file = os.path.join('...', '...', '...', 'Validation_set.csv')
+test_file = os.path.join('...', '...', '...', 'Test_set.csv')  # 添加测试集路径
 
-tf_embed_path = r'D:\test2\test-main\result_v1\Specific/hESC 500/result_1/Channel1.csv'
-target_embed_path = r'D:\test2\test-main\result_v1\Specific/hESC 500/result_1/Channel2.csv'
+tf_embed_path = '.../Channel1.csv'
+target_embed_path = '.../Channel2.csv'
 
 data_input = pd.read_csv(exp_file,index_col=0)
 loader = load_data(data_input)
@@ -555,4 +555,5 @@ try:
     except Exception as e_tda:
         print(f"TDA cycles plotting skipped due to error: {e_tda}")
 except Exception as e:
+
     print(f"Additional marker plotting skipped due to error: {e}")
