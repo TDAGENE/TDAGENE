@@ -50,6 +50,8 @@ def compute_tda_feature(x, adj, device, filtration_scale=1.5):
     return tda_feature
 
 
+
+
 class GENELink(nn.Module):
     def __init__(self, input_dim, hidden1_dim, hidden2_dim, hidden3_dim, output_dim, num_head1, num_head2,
                  alpha, device, type, reduction, dropout=0.1, decoder_type=None, fusion_type='gate', extra_feat_dim=0):
